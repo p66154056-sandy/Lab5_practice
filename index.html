@@ -1,0 +1,429 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+  <meta charset="UTF-8">
+  <title>台南市即時環境資訊</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      font-family: "Microsoft JhengHei", sans-serif;
+      background: #fff;
+      margin: 20px;
+      font-size: 20px;
+    }
+
+    .row-top {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    /* 4 欄 */
+    .row-info {
+      display: grid;
+      grid-template-columns: 1fr 1fr 1.2fr 1fr;
+      gap: 6px;
+    }
+
+    .row-info>div:nth-child(1) {
+      text-align: left;
+    }
+
+    .row-info>div:nth-child(2) {
+      text-align: center;
+    }
+
+    /* 天氣 */
+    .row-info>div:nth-child(3) {
+      text-align: center;
+    }
+
+    /* AQI */
+    .row-info>div:nth-child(4) {
+      text-align: right;
+    }
+
+    /* AQI 方框 */
+    #aqi {
+      font-weight: bold;
+      padding: 2px 6px;
+      border-radius: 4px;
+    }
+
+    .info-btn {
+      margin-left: 8px;
+      color: rgb(71, 134, 235);
+      font-size: 16px;
+      font-weight: bold;
+      cursor: default;
+      user-select: none;
+    }
+
+    /* 共用 popover 外觀（預設：AQI 仍用 fixed 右上角） */
+    .popover {
+      display: none;
+      background: rgba(145, 137, 137, 0.8);
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      padding: 10px;
+      width: 400px;
+      font-size: 14px;
+      box-shadow: 0 4px 10px rgba(0, 0, 0, 0.2);
+      z-index: 9999;
+    }
+
+    /* AQI：維持原本右上角顯示 */
+    .popover-fixed {
+      position: fixed;
+      top: 5px;
+      right: 20px;
+    }
+
+    /* ✅ AQI：原本規則保留（ⓘ旁邊緊鄰 popover） */
+    .info-btn:hover+.popover,
+    .popover:hover {
+      display: block;
+    }
+
+    .aqi-grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 6px 12px;
+    }
+
+    .aqi-title {
+      color: #fff;
+      font-size: 16px;
+    }
+
+    .aqi-level {
+      padding: 6px;
+      border-radius: 4px;
+      font-weight: bold;
+      text-align: center;
+      white-space: nowrap;
+      width: 100%;
+      box-sizing: border-box;
+    }
+
+    /* AQI 色階 */
+    .level1 {
+      background: rgba(121, 255, 121, 0.75);
+      color: #000;
+    }
+
+    .level2 {
+      background: rgba(255, 255, 111, 0.75);
+      color: #000;
+    }
+
+    .level3 {
+      background: rgba(255, 187, 119, 0.75);
+      color: #000;
+    }
+
+    .level4 {
+      background: rgba(255, 45, 45, 0.75);
+      color: #fff;
+    }
+
+    .level5 {
+      background: rgba(177, 91, 255, 0.75);
+      color: #fff;
+    }
+
+    .level6 {
+      background: rgba(126, 0, 35, 0.75);
+      color: #fff;
+    }
+  </style>
+</head>
+
+<body>
+  <div class="container">
+
+    <!-- 第一排：時間 + 固定測站說明 -->
+    <div class="row-top">
+      <div id="datetime">--</div>
+      <div style="font-size:14px; text-align:right; line-height:1.6;">
+        空氣品質：臺南測站｜天氣：臺南氣象站
+      </div>
+    </div>
+
+    <!-- 第二排：四個資訊 -->
+    <div class="row-info">
+      <div>🌡 溫度：<span id="temp">載入中…</span></div>
+      <div>💧 濕度：<span id="humidity">載入中…</span></div>
+      <div>⛅ 天氣：<span id="weather">載入中…</span></div>
+
+      <!-- AQI -->
+      <div style="position:relative; display:inline-block;">
+        🌫 AQI：<span id="aqi">載入中…</span>
+        <span class="info-btn">ⓘ</span>
+        <div class="popover popover-fixed">
+          <b class="aqi-title">AQI 分級說明</b>
+          <div class="aqi-grid">
+            <div class="aqi-level level1">0-50 良好</div>
+            <div class="aqi-level level2">51-100 普通</div>
+            <div class="aqi-level level3">101-150 對敏感族群不健康</div>
+            <div class="aqi-level level4">151-200 對所有人不健康</div>
+            <div class="aqi-level level5">201-300 非常不健康</div>
+            <div class="aqi-level level6">301+ 危害</div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <script>
+    // 時間
+    function updateTime() {
+      const now = new Date();
+      const weekdays = ["日", "一", "二", "三", "四", "五", "六"];
+      const formatted = now.toLocaleDateString() + " (週" + weekdays[now.getDay()] + ") " + now.toLocaleTimeString();
+      document.getElementById("datetime").innerText = formatted;
+    }
+    setInterval(updateTime, 1000);
+    updateTime();
+
+    // AQI 顏色
+    function getAQIColor(aqi) {
+      if (aqi <= 50) return "#79FF79";
+      if (aqi <= 100) return "#FFFF6F";
+      if (aqi <= 150) return "#FFBB77";
+      if (aqi <= 200) return "#FF2D2D";
+      if (aqi <= 300) return "#B15BFF";
+      return "#7E0023";
+    }
+
+
+    // 固定使用臺南氣象站，不提供測站下拉選單。
+    const stationMap = {
+      "臺南": { cwaId: "467410" }
+    };
+
+    // ✅✅✅ 改：用 CWA O-A0001-001 抓溫濕度（一次抓完）
+    // 學生練習版：請將以下兩個字串換成自己申請的 API Key。
+    // 注意：前端金鑰會公開，本次僅為練習，請不要將填入真實金鑰的檔案上傳公開儲存庫。
+    const CWA_API_KEY = "YOUR_CWA_API_KEY";        //請填入中央氣象署的API授權碼
+    const MOENV_API_KEY = "YOUR_MOENV_API_KEY";    //請填入環境部的API key
+
+    // 直接向中央氣象署與環境部官方 API 取得資料（不經 Render）。
+    const CWA_URL = new URL("https://opendata.cwa.gov.tw/api/v1/rest/datastore/O-A0001-001");
+    CWA_URL.searchParams.set("Authorization", CWA_API_KEY);
+    CWA_URL.searchParams.set("format", "JSON");
+    const CWA_API = CWA_URL.toString();
+
+    const AQI_URL = new URL("https://data.moenv.gov.tw/api/v2/aqx_p_432");
+    AQI_URL.searchParams.set("api_key", MOENV_API_KEY);
+    AQI_URL.searchParams.set("limit", "1000");
+    AQI_URL.searchParams.set("sort", "ImportDate desc");
+    AQI_URL.searchParams.set("format", "JSON");
+    const AQI_API = AQI_URL.toString();
+
+    let cwaCache = { ts: 0, byId: new Map() };
+    const CWA_CACHE_MS = 60 * 1000; // 1分鐘更新一次
+
+    async function fetchCWAAllStations() {
+      const now = Date.now();
+      if (cwaCache.byId.size > 0 && now - cwaCache.ts < CWA_CACHE_MS) {
+        return cwaCache.byId;
+      }
+
+      const res = await fetch(CWA_API, { cache: "no-store" });
+      const json = await res.json();
+
+      // ✅ 兼容：records.location（常見）或 records.Station（你之前成功那種）
+      const list =
+        (Array.isArray(json?.records?.location) && json.records.location) ||
+        (Array.isArray(json?.records?.Station) && json.records.Station) ||
+        [];
+
+      const map = new Map();
+      for (const item of list) {
+        const id = item?.StationId ?? item?.stationId ?? item?.stationID ?? item?.StationID;
+        if (!id) continue;
+        map.set(String(id).trim(), item);
+      }
+
+      cwaCache = { ts: now, byId: map };
+      return map;
+    }
+
+    function findCwaStation(byIdMap, stationKey) {
+      const key = String(stationKey).trim();
+
+      // 1) 先用 StationId 直接找
+      if (byIdMap.has(key)) return byIdMap.get(key);
+
+      // 2) 找不到就用站名（StationName）模糊比對
+      for (const v of byIdMap.values()) {
+        const name = String(v?.StationName ?? v?.stationName ?? "").trim();
+        if (name && (name === key || name.includes(key) || key.includes(name))) return v;
+      }
+      return null;
+    }
+
+
+    function getElementValue(weatherElementArray, elementName) {
+      const el = (weatherElementArray || []).find(e =>
+        (e.elementName || e.ElementName || "").toUpperCase() === elementName.toUpperCase()
+      );
+      const v = el?.elementValue ?? el?.ElementValue;
+      const n = parseFloat(v);
+      return Number.isFinite(n) ? n : null;
+    }
+
+    // ✅ 從 CWA payload 找到指定 StationId 的那筆 location
+    function findCwaLocationById(payload, stationId) {
+      // ✅ 你的 JSON 是 records.Station（陣列）
+      const list =
+        payload?.records?.Station ||
+        payload?.records?.station ||
+        payload?.records?.location ||
+        payload?.records?.Location ||
+        [];
+
+      if (!Array.isArray(list)) return null;
+
+      const sid = String(stationId).trim();
+      return list.find(x => String(x.StationId).trim() === sid) || null;
+    }
+
+
+    function readElement(st, keyUpper) {
+      const we = st?.WeatherElement;
+
+      // ✅ 型態 1：WeatherElement 是物件（AirTemperature / RelativeHumidity）
+      if (we && typeof we === "object" && !Array.isArray(we)) {
+        if (keyUpper === "AIRTEMPERATURE") return parseFloat(we.AirTemperature);
+        if (keyUpper === "RELATIVEHUMIDITY") return parseFloat(we.RelativeHumidity);
+      }
+
+      // ✅ 型態 2：WeatherElement 是陣列（[{elementName, elementValue}, ...]）
+      if (Array.isArray(we)) {
+        const hit = we.find(e => String(e.elementName || e.ElementName || "").toUpperCase() === keyUpper);
+        const v = hit?.elementValue ?? hit?.ElementValue;
+        return parseFloat(v);
+      }
+
+      return NaN;
+    }
+
+    // ✅ 溫度（CWA）
+    async function loadTemp(station) {
+      const stationKey = stationMap[station].cwaId; // 可以放 StationId（C0X250）或站名（臺南/新營）
+      try {
+        const byIdMap = await fetchCWAAllStations();
+        const st = findCwaStation(byIdMap, stationKey);
+        if (!st) throw new Error(`CWA 找不到 stationKey=${stationKey}`);
+
+        const t = readElement(st, "AIRTEMPERATURE");
+        if (!Number.isFinite(t) || t === -99) throw new Error(`CWA 溫度無效：${t}`);
+
+        document.getElementById("temp").innerText = `${t.toFixed(1)} °C`;
+} catch (e) {
+        console.error("[CWA][TEMP] load failed:", e);
+        document.getElementById("temp").innerText = "⚠ 讀取失敗";
+} finally {
+}
+    }
+
+    // ✅ 濕度（CWA）
+    async function loadHumidity(station) {
+      const stationKey = stationMap[station].cwaId;
+      try {
+        const byIdMap = await fetchCWAAllStations();
+        const st = findCwaStation(byIdMap, stationKey);
+        if (!st) throw new Error(`CWA 找不到 stationKey=${stationKey}`);
+
+        const h = readElement(st, "RELATIVEHUMIDITY");
+        if (!Number.isFinite(h) || h === -99) throw new Error(`CWA 濕度無效：${h}`);
+
+        document.getElementById("humidity").innerText = `${h.toFixed(0)} %`;
+} catch (e) {
+        console.error("[CWA][HUM] load failed:", e);
+        document.getElementById("humidity").innerText = "⚠ 讀取失敗";
+} finally {
+}
+    }
+
+
+    // 天氣固定使用臺南氣象站（467410），資料由中央氣象署官方 API 取得。
+    async function loadWeather() {
+      const el = document.getElementById("weather");
+      try {
+        const res = await fetch(CWA_API, { cache: "no-store" });
+        if (!res.ok) throw new Error(`CWA HTTP ${res.status}`);
+        const payload = await res.json();
+        const list = payload?.records?.Station || payload?.records?.station ||
+                     payload?.records?.location || payload?.records?.Location || [];
+        if (!Array.isArray(list) || list.length === 0) throw new Error("官方 API 沒有回傳氣象測站資料");
+
+        // 優先以臺南站站號查找；若資料版本站號不同，再以站名查找。
+        const st = list.find(x => String(x?.StationId ?? x?.stationId ?? x?.StationID ?? "").trim() === "467410") ||
+                   list.find(x => String(x?.StationName ?? x?.stationName ?? "").trim().includes("臺南"));
+        if (!st) throw new Error("找不到臺南氣象站（467410）");
+
+        const we = st.WeatherElement ?? st.weatherElement ?? {};
+        const weather = String(we.Weather ?? we.weather ?? "").trim();
+        if (!weather || weather === "-99") throw new Error("臺南氣象站目前沒有有效天氣描述");
+        const now = we.Now ?? we.now ?? {};
+        const rain = now.Precipitation ?? now.precipitation;
+        const rainText = rain !== undefined && rain !== null && String(rain).trim() !== "" && String(rain) !== "-99"
+          ? `｜降雨 ${rain}` : "";
+        el.innerText = `${weather}${rainText}`;
+      } catch (e) {
+        console.error("[CWA][WEATHER] load failed:", e);
+        if (el) el.innerText = "⚠ 讀取失敗";
+      }
+    }
+
+    // 空氣品質固定使用「臺南」測站，資料由環境部官方 API 取得。
+    async function loadAQI() {
+      const aqiBox = document.getElementById("aqi");
+      aqiBox.innerText = "載入中…";
+      aqiBox.style.backgroundColor = "transparent";
+      try {
+        const res = await fetch(AQI_API, { cache: "no-store" });
+        if (!res.ok) throw new Error(`HTTP ${res.status}`);
+        const data = await res.json();
+        const records = Array.isArray(data) ? data :
+          (data.records ?? data.result?.records ?? data.data?.records ?? data.result ?? data.data);
+        if (!Array.isArray(records)) throw new Error("官方 API 回傳的空品資料格式不符");
+
+        const record = records.find(r => String(r?.sitename ?? r?.SiteName ?? r?.station_name ?? "").trim() === "臺南") ||
+          records.find(r => String(r?.sitename ?? r?.SiteName ?? r?.station_name ?? "").trim().includes("臺南"));
+        if (!record) throw new Error("空品資料中找不到臺南測站");
+        const aqi = Number(record.aqi ?? record.AQI);
+        if (!Number.isFinite(aqi)) throw new Error("臺南測站 AQI 不是有效數字");
+        const status = record.status ?? record.Status ?? "";
+        aqiBox.innerText = `${aqi}${status ? `（${status}）` : ""}`;
+        aqiBox.style.backgroundColor = getAQIColor(aqi);
+      } catch (e) {
+        console.error("[AQI] 讀取失敗：", e);
+        aqiBox.innerText = "⚠ 讀取失敗";
+      }
+    }
+
+    // 溫度、濕度、天氣與空品都固定使用臺南測站。
+    function updateAll() {
+loadTemp("臺南");
+      loadHumidity("臺南");
+      loadWeather();
+      loadAQI();
+    }
+
+    updateAll();
+    setInterval(() => {
+      updateAll();
+      console.log("⏳ 已更新臺南測站資料");
+    }, 300000);
+
+  </script>
+</body>
+
+</html>
